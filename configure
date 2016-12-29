@@ -226,7 +226,7 @@ trylibs () {
   echo "Checking whether system has $2..." >&3
   shift 2
   if $CC_AUTO $CPPFLAGS_AUTO $CFLAGS_AUTO -c -o try$name.o src/sysdeps/try$name.c 2>/dev/null ; then
-    until $CC_AUTO $CFLAGS_AUTO $LDFLAGS_AUTO -o /dev/null try$name.o $args 2>/dev/null ; do
+    until $CC_AUTO $CFLAGS_AUTO $LDFLAGS_AUTO -o try$name try$name.o $args 2>/dev/null ; do
       if test -z "$*" ; then
         rm -f try$name.o
         echo
@@ -242,7 +242,7 @@ trylibs () {
     else
       echo "  ... yes, with$args" >&3
     fi
-    rm -f try$name.o
+    rm -f try$name.o try$name
     return 0
   else
     echo
