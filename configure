@@ -471,13 +471,20 @@ EOF
   fi
   exec 3>&-
 
-  echo "Checking system endianness..."
-  $CC_AUTO $CPPFLAGS_AUTO $CFLAGS_AUTO -o tryendianness src/sysdeps/tryendianness.c
-  endianness=$(./tryendianness) || fail "$0: unable to determine endianness"
+    echo "Checking system endianness..."
+  if $CC_AUTO $CPPFLAGS_AUTO $CFLAGS_AUTO -o trybigendian src/sysdeps/trybigendian.c 2>/dev/null; then
+      endianness=big
+  else
+      if $CC_AUTO $CPPFLAGS_AUTO $CFLAGS_AUTO -o trylittleendian src/sysdeps/trylittleendian.c 2>/dev/null; then
+          endianness=little
+      else
+          fail "$0: unable to determine endianness"
+      fi
+  fi
   echo "endianness: $endianness" >> $sysdeps/sysdeps
   echo "#define ${package_macro_name}_ENDIANNESS \"$endianness\"" >> $sysdeps/sysdeps.h
   echo "  ... $endianness"
-  rm -f tryendianness
+  rm -f trybigendian trylittleendian
 
   trytypes
   choose clr accept4 ACCEPT4 'accept4()'
