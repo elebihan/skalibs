@@ -154,25 +154,69 @@ choose () {
   fi
 }
 
+findtypesize () {
+  typ=$1
+  abbr=$2
+  r=false
+  type_size=0
+  while true; do
+    cat>trysizeof${abbr}.c<<EOF
+#include <sys/types.h>
+
+int main(void)
+{
+  static int v = 1 / !!((sizeof($typ) == $type_size));
+  return 0;
+}
+EOF
+    if $CC_AUTO $CPPFLAGS_AUTO $CFLAGS_AUTO $LDFLAGS_AUTO -o trysizeof${abbr} trysizeof${abbr}.c 2>/dev/null; then
+        r=true
+        break
+    fi
+    type_size=$(expr $type_size + 1)
+    test $type_size -le 16 || break
+  done
+  rm -f trysizeof${abbr} trysizeof${abbr}.c
+  test $r = true || fail "$0: unable to determine size of $typ"
+  caps=$(echo "sizeof${abbr}" | tr a-z A-Z)
+  echo "#define ${package_macro_name}_${caps} $type_size" >> $sysdeps/sysdeps.h
+  echo "sizeof${abbr}: $type_size" >> $sysdeps/sysdeps
+}
+
+findtypesign () {
+  typ=$1
+  abbr=$2
+  caps=$(echo "signed${abbr}" | tr a-z A-Z)
+  cat>trysignof${abbr}.c<<EOF
+#include <sys/types.h>
+
+int main(void)
+{
+  static int v = 1 / !!(((($typ) -1) < 0));
+  return 0;
+}
+EOF
+  if $CC_AUTO $CPPFLAGS_AUTO $CFLAGS_AUTO $LDFLAGS_AUTO -o trysignof${abbr} trysignof${abbr}.c 2>/dev/null; then
+    echo "#define ${package_macro_name}_HASSIGNED${caps}" >> $sysdeps/sysdeps.h
+    echo "#undef ${package_macro_name}_HASUNSIGNED${caps}" >> $sysdeps/sysdeps.h
+    echo "signed${abbr}: yes" >> $sysdeps/sysdeps
+  else
+    echo "#undef ${package_macro_name}_HASSIGNED${caps}" >> $sysdeps/sysdeps.h
+    echo "#define ${package_macro_name}_HASUNSIGNED${caps}" >> $sysdeps/sysdeps.h
+    echo "signed${abbr}: no" >> $sysdeps/sysdeps
+  fi
+  rm -f trysignof${abbr} trysignof${abbr}.c
+}
+
 trytypes () {
   echo "Checking size and signedness of standard types..."
-  $CC_AUTO $CPPFLAGS_AUTO $CFLAGS_AUTO $LDFLAGS_AUTO -o output-types src/sysdeps/output-types.c
-  ./output-types >> $sysdeps/sysdeps
-  ./output-types | grep -F sizeof | while read key value ; do
-    caps=$(echo $key | sed s/:\$// | tr a-z A-Z)
-    echo "#define ${package_macro_name}_${caps} $value" >> $sysdeps/sysdeps.h
+  for t in "unsigned short" "unsigned int" "unsigned long"; do
+    findtypesize "$t" "${t/nsigned /}"
   done
-  ./output-types | grep -F signed | while read key value ; do
-    caps=$(echo $key | sed s/:\$// | tr a-z A-Z)
-    if test $value = yes ; then
-      echo "#define ${package_macro_name}_HASSIGNED${caps}"
-      echo "#undef ${package_macro_name}_HASUNSIGNED${caps}"
-    else
-      echo "#undef ${package_macro_name}_HASSIGNED${caps}"
-      echo "#define ${package_macro_name}_HASUNSIGNED${caps}"
-    fi >> $sysdeps/sysdeps.h
+  for t in size uid gid pid time dev ino; do
+    findtypesize "${t}_t" "$t"
+    findtypesign "${t}_t" "$t"
   done
-  rm -f output-types
   echo "  ... done"
 }
 
